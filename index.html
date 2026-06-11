@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Certified Delivery Report – Zielarchitektur & ROI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6"></script>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#101a2e;
+      --muted:#96a9cd;
+      --text:#e9efff;
+      --line:#233154;
+      --accent:#5aa7ff;
+      --good:#2bd576;
+      --warn:#ffcc66;
+      --bad:#ff5c77;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 800px at 20% 10%, rgba(90,167,255,.25), transparent 60%),
+                  radial-gradient(900px 700px at 90% 20%, rgba(43,213,118,.18), transparent 55%),
+                  radial-gradient(900px 700px at 50% 120%, rgba(255,204,102,.10), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+    }
+    .wrap{max-width:1200px;margin:0 auto;padding:22px 16px 44px}
+
+    header{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap}
+    .title h1{margin:0;font-size:20px;letter-spacing:.2px}
+    .title p{margin:8px 0 0;color:var(--muted);line-height:1.45;max-width:920px}
+    .meta{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+    .chip{
+      background:rgba(16,26,46,.85);
+      border:1px solid rgba(35,49,84,.9);
+      padding:8px 10px;border-radius:999px;
+      color:var(--muted);
+      font-size:12px;
+      display:flex;align-items:center;gap:8px
+    }
+    .dot{width:8px;height:8px;border-radius:999px;background:var(--accent);box-shadow:0 0 0 4px rgba(90,167,255,.12)}
+
+    .card{
+      background: linear-gradient(180deg, rgba(16,26,46,.92), rgba(13,21,38,.92));
+      border:1px solid rgba(35,49,84,.9);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+    }
+    .hd{padding:14px 16px;border-bottom:1px solid rgba(35,49,84,.75);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .hd h2{margin:0;font-size:14px;letter-spacing:.3px;color:#dfe8ff}
+    .bd{padding:14px 16px}
+
+    /* Layout: Architecture first, then KPIs + ROI */
+    .stack{display:flex;flex-direction:column;gap:16px}
+    .below{display:grid;grid-template-columns: 1.05fr .95fr;gap:16px}
+    @media (max-width: 980px){.below{grid-template-columns:1fr}}
+
+    /* KPIs */
+    .kpis{display:grid;grid-template-columns: repeat(4, 1fr); gap:12px}
+    @media (max-width: 980px){.kpis{grid-template-columns: repeat(2,1fr)}}
+    @media (max-width: 520px){.kpis{grid-template-columns: 1fr}}
+    .kpi{
+      background: linear-gradient(180deg, rgba(15,26,51,.9), rgba(12,18,33,.9));
+      border:1px solid rgba(35,49,84,.75);
+      border-radius:14px;
+      padding:12px 12px;
+      min-height:82px;
+    }
+    .kpi .label{color:var(--muted);font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .kpi .value{font-size:20px;margin-top:8px;font-weight:700;letter-spacing:.2px}
+    .kpi .hint{margin-top:6px;color:var(--muted);font-size:12px;line-height:1.35}
+
+    /* Architecture */
+    .legend{display:flex;gap:10px;flex-wrap:wrap}
+    .lg{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+    .sw{width:10px;height:10px;border-radius:3px}
+
+    .svgWrap{background: rgba(9,14,26,.55); border:1px solid rgba(35,49,84,.75); border-radius:14px; padding:10px; overflow:auto; position:relative}
+    svg{min-width: 920px;}
+
+    /* Tooltip */
+    .tip{
+      position: fixed;
+      z-index: 9999;
+      display: none;
+      max-width: 360px;
+      background: rgba(10,16,30,.92);
+      border: 1px solid rgba(35,49,84,.95);
+      box-shadow: 0 14px 40px rgba(0,0,0,.45);
+      border-radius: 14px;
+      padding: 10px 12px;
+      color: var(--text);
+      pointer-events: none;
+      transform: translate(12px, 12px);
+      opacity: 0;
+      transition: opacity .12s ease;
+      backdrop-filter: blur(6px);
+    }
+    .tip.on{opacity: 1;}
+    .tip .h{font-weight: 700; font-size: 13px; letter-spacing:.2px; margin:0 0 6px}
+    .tip .b{color: var(--muted); font-size: 12px; line-height: 1.45; margin:0}
+    .tip .kpiLine{display:flex; gap:10px; flex-wrap:wrap; margin-top:8px}
+    .tip .mini{font-size:11px;color: var(--muted); padding:3px 8px; border-radius:999px; border:1px solid rgba(35,49,84,.85); background: rgba(16,26,46,.65)}
+
+    /* ROI form */
+    .small{font-size:12px;color:var(--muted)}
+    .form{display:grid;grid-template-columns:1fr 1fr; gap:10px}
+    @media (max-width: 520px){.form{grid-template-columns:1fr}}
+    .row{display:flex;flex-direction:column;gap:6px}
+    label{font-size:12px;color:var(--muted)}
+    input, textarea{
+      appearance:none;
+      background: rgba(9,14,26,.65);
+      border:1px solid rgba(35,49,84,.9);
+      color:var(--text);
+      border-radius:12px;
+      padding:10px 10px;
+      font-size:13px;
+      outline:none;
+      resize: vertical;
+    }
+    input:focus, textarea:focus{border-color: rgba(90,167,255,.85); box-shadow: 0 0 0 4px rgba(90,167,255,.15)}
+
+    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    button{
+      cursor:pointer;
+      border-radius:12px;
+      border:1px solid rgba(35,49,84,.9);
+      background: linear-gradient(180deg, rgba(90,167,255,.22), rgba(90,167,255,.10));
+      color:#eaf2ff;
+      padding:10px 12px;
+      font-weight:600;
+      font-size:13px;
+    }
+    button.secondary{background: rgba(16,26,46,.65); color: var(--muted)}
+
+    .foot{margin-top:12px;color:var(--muted);font-size:12px;line-height:1.45}
+
+    .panel{border:1px solid rgba(35,49,84,.75);background: rgba(9,14,26,.50);border-radius:14px;padding:12px}
+
+    .sourceChips{display:flex;gap:10px;flex-wrap:wrap}
+    .source{
+      display:flex;align-items:flex-start;gap:10px;
+      padding:10px 12px;
+      background: rgba(9,14,26,.55);
+      border:1px solid rgba(35,49,84,.75);
+      border-radius:14px;
+      min-width: 260px;
+      flex: 1 1 260px;
+    }
+    .badge{width:10px;height:10px;border-radius:3px;margin-top:4px}
+    .source b{font-size:13px}
+    .source div{color:var(--muted);font-size:12px;line-height:1.35;margin-top:4px}
+
+    .chartBox{height:280px}
+    canvas{max-height:280px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <h1>Certified Delivery Report – Zielarchitektur & ROI</h1>
+        <p>
+          End-to-End Automatisierung je Lieferung: <b>3 Datenquellen</b> → <b>n8n Orchestrierung</b> → <b>Langdock/LLM Extraktion</b> → <b>Dossier + Report-PDF</b> → <b>Versand</b>.
+        </p>
+      </div>
+      <div class="meta">
+        <div class="chip"><span class="dot"></span><span><b>Stand</b>: <span id="asof"></span></span></div>
+        <div class="chip"><span class="dot" style="background:var(--good)"></span><span><b>Ziel</b>: Touch-Time ↓</span></div>
+        <div class="chip"><span class="dot" style="background:var(--warn)"></span><span><b>Prinzip</b>: Exception-only</span></div>
+      </div>
+    </header>
+
+    <div class="stack">
+      <!-- Architecture first -->
+      <div class="card">
+        <div class="hd">
+          <h2>Architektur (übersichtlich)</h2>
+          <div class="legend">
+            <div class="lg"><span class="sw" style="background:var(--accent)"></span> Automation</div>
+            <div class="lg"><span class="sw" style="background:var(--warn)"></span> KI-Verarbeitung</div>
+            <div class="lg"><span class="sw" style="background:var(--good)"></span> Dossier/Repository</div>
+            <div class="lg"><span class="sw" style="background:var(--bad)"></span> Exceptions</div>
+          </div>
+        </div>
+        <div class="bd">
+          <!-- Show the 3 sources explicitly up-front -->
+          <div class="panel" style="margin-bottom:12px">
+            <div class="small" style="margin-bottom:10px"><b>Datenquellen (3 Nachweise je Lieferung)</b></div>
+            <div class="sourceChips">
+              <div class="source">
+                <span class="badge" style="background:var(--good)"></span>
+                <div>
+                  <b>Materialprüfzeugnis</b>
+                  <div>Lieferantendokument (PDF/Scan) inkl. Charge, Datum, Zertifikat-Nr.</div>
+                </div>
+              </div>
+              <div class="source">
+                <span class="badge" style="background:var(--good)"></span>
+                <div>
+                  <b>Messbericht Messraum</b>
+                  <div>PDF/Scan aus Messraum (Fileserver), relevante Maße + Messdatum.</div>
+                </div>
+              </div>
+              <div class="source">
+                <span class="badge" style="background:var(--good)"></span>
+                <div>
+                  <b>CAQ Serienprüfung</b>
+                  <div>Strukturierte Prüfdaten (API/Export): Prüfumfang, Messwerte, Bewertung, Datum.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="svgWrap" aria-label="Architekturdiagramm" id="archWrap">
+            <svg viewBox="0 0 1180 450" role="img">
+              <!-- Hover tooltips: data-tip keys are resolved in JS -->
+              <g class="hot" data-tip="src-coc">
+                <rect class="box" x="30" y="40" width="280" height="62" rx="14"></rect>
+                <text class="t1" x="46" y="66">Materialprüfzeugnis</text>
+                <text class="t2" x="46" y="86">PDF/Scan • Charge • Zertifikat</text>
+              </g>
+
+              <g class="hot" data-tip="src-metrology">
+                <rect class="box" x="30" y="122" width="280" height="62" rx="14"></rect>
+                <text class="t1" x="46" y="148">Messbericht Messraum</text>
+                <text class="t2" x="46" y="168">Fileserver • PDF/Scan • Maße</text>
+              </g>
+
+              <g class="hot" data-tip="src-caq">
+                <rect class="box" x="30" y="204" width="280" height="62" rx="14"></rect>
+                <text class="t1" x="46" y="230">CAQ Serienprüfung</text>
+                <text class="t2" x="46" y="250">API/Export • strukturierte Werte</text>
+              </g>
+
+              <g class="hot" data-tip="n8n">
+                <rect class="box a" x="350" y="70" width="320" height="70" rx="14"></rect>
+                <text class="t1" x="366" y="96">n8n Orchestrierung</text>
+                <text class="t2" x="366" y="116">Trigger • Connectoren • Retries • Logging</text>
+              </g>
+
+              <g class="hot" data-tip="langdock">
+                <rect class="box k" x="350" y="160" width="320" height="78" rx="14"></rect>
+                <text class="t1" x="366" y="186">Langdock / LLM Verarbeitung</text>
+                <text class="t2" x="366" y="206">Klassifikation • OCR/Parsing • Extraktion</text>
+                <text class="t2" x="366" y="224">Validierung & Matching (Shipment/Los/Datum)</text>
+              </g>
+
+              <g class="hot" data-tip="exceptions">
+                <rect class="box e" x="350" y="260" width="320" height="62" rx="14"></rect>
+                <text class="t1" x="366" y="286">Exception Queue (HITL)</text>
+                <text class="t2" x="366" y="306">nur bei Unsicherheit/Abweichungen</text>
+              </g>
+
+              <g class="hot" data-tip="dossier">
+                <rect class="box d" x="710" y="70" width="440" height="78" rx="14"></rect>
+                <text class="t1" x="726" y="96">Dossier & Repository</text>
+                <text class="t2" x="726" y="116">Originalnachweise + Metadaten + Versionen + Audit</text>
+                <text class="t2" x="726" y="134">Dossier-Status: Draft → Checked → Released → Sent</text>
+              </g>
+
+              <g class="hot" data-tip="reportgen">
+                <rect class="box" x="710" y="168" width="440" height="70" rx="14"></rect>
+                <text class="t1" x="726" y="194">Report Generator</text>
+                <text class="t2" x="726" y="214">Template → PDF Prüfbericht je Lieferung</text>
+              </g>
+
+              <g class="hot" data-tip="distribution">
+                <rect class="box" x="710" y="258" width="440" height="62" rx="14"></rect>
+                <text class="t1" x="726" y="284">Versand & Nachweis</text>
+                <text class="t2" x="726" y="304">E-Mail / Portal-Link / EDI • Versandprotokoll</text>
+              </g>
+
+              <g class="hot" data-tip="monitoring">
+                <rect class="box" x="710" y="338" width="440" height="62" rx="14"></rect>
+                <text class="t1" x="726" y="364">Monitoring</text>
+                <text class="t2" x="726" y="384">Touch-Time • Durchlaufzeit • Fehlerrate • SLA</text>
+              </g>
+
+              <defs>
+                <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="rgba(16,26,46,.95)" />
+                  <stop offset="1" stop-color="rgba(9,14,26,.70)" />
+                </linearGradient>
+                <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="rgba(0,0,0,.35)" />
+                </filter>
+                <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(233,239,255,.75)" />
+                </marker>
+                <style>
+                  .box{fill:url(#g);stroke:rgba(35,49,84,.9);stroke-width:1.2;rx:14;filter:url(#sh)}
+                  .a{stroke:rgba(90,167,255,.95)}
+                  .k{stroke:rgba(255,204,102,.95)}
+                  .d{stroke:rgba(43,213,118,.95)}
+                  .e{stroke:rgba(255,92,119,.95)}
+                  .t1{fill:#e9efff;font:600 13px Inter, sans-serif}
+                  .t2{fill:rgba(150,169,205,.95);font:500 11.5px Inter, sans-serif}
+                  .ln{stroke:rgba(233,239,255,.65);stroke-width:1.2;fill:none;marker-end:url(#ar)}
+                  .hot{cursor: help; pointer-events: all}
+                  .hot *{pointer-events: none}
+                  .hot:hover .box{stroke: rgba(233,239,255,.95)}
+                </style>
+              </defs>
+
+              <!-- Left: sources -->
+              <rect class="box" x="30" y="40" width="280" height="62" rx="14"></rect>
+              <text class="t1" x="46" y="66">Materialprüfzeugnis</text>
+              <text class="t2" x="46" y="86">PDF/Scan • Charge • Zertifikat</text>
+
+              <rect class="box" x="30" y="122" width="280" height="62" rx="14"></rect>
+              <text class="t1" x="46" y="148">Messbericht Messraum</text>
+              <text class="t2" x="46" y="168">Fileserver • PDF/Scan • Maße</text>
+
+              <rect class="box" x="30" y="204" width="280" height="62" rx="14"></rect>
+              <text class="t1" x="46" y="230">CAQ Serienprüfung</text>
+              <text class="t2" x="46" y="250">API/Export • strukturierte Werte</text>
+
+              <!-- Center: orchestration + AI -->
+              <rect class="box a" x="350" y="70" width="320" height="70" rx="14"></rect>
+              <text class="t1" x="366" y="96">n8n Orchestrierung</text>
+              <text class="t2" x="366" y="116">Trigger • Connectoren • Retries • Logging</text>
+
+              <rect class="box k" x="350" y="160" width="320" height="78" rx="14"></rect>
+              <text class="t1" x="366" y="186">Langdock / LLM Verarbeitung</text>
+              <text class="t2" x="366" y="206">Klassifikation • OCR/Parsing • Extraktion</text>
+              <text class="t2" x="366" y="224">Validierung & Matching (Shipment/Los/Datum)</text>
+
+              <rect class="box e" x="350" y="260" width="320" height="62" rx="14"></rect>
+              <text class="t1" x="366" y="286">Exception Queue (HITL)</text>
+              <text class="t2" x="366" y="306">nur bei Unsicherheit/Abweichungen</text>
+
+              <!-- Right: repository + outputs -->
+              <rect class="box d" x="710" y="70" width="440" height="78" rx="14"></rect>
+              <text class="t1" x="726" y="96">Dossier & Repository</text>
+              <text class="t2" x="726" y="116">Originalnachweise + Metadaten + Versionen + Audit</text>
+              <text class="t2" x="726" y="134">Dossier-Status: Draft → Checked → Released → Sent</text>
+
+              <rect class="box" x="710" y="168" width="440" height="70" rx="14"></rect>
+              <text class="t1" x="726" y="194">Report Generator</text>
+              <text class="t2" x="726" y="214">Template → PDF Prüfbericht je Lieferung</text>
+
+              <rect class="box" x="710" y="258" width="440" height="62" rx="14"></rect>
+              <text class="t1" x="726" y="284">Versand & Nachweis</text>
+              <text class="t2" x="726" y="304">E-Mail / Portal-Link / EDI • Versandprotokoll</text>
+
+              <rect class="box" x="710" y="338" width="440" height="62" rx="14"></rect>
+              <text class="t1" x="726" y="364">Monitoring</text>
+              <text class="t2" x="726" y="384">Touch-Time • Durchlaufzeit • Fehlerrate • SLA</text>
+
+              <!-- Lines -->
+              <path class="ln" d="M 310 71 C 328 71, 336 90, 350 98" />
+              <path class="ln" d="M 310 153 C 330 153, 332 116, 350 112" />
+              <path class="ln" d="M 310 235 C 328 235, 336 132, 350 122" />
+
+              <path class="ln" d="M 670 112 C 690 112, 696 112, 710 112" />
+              <path class="ln" d="M 670 200 C 690 200, 696 200, 710 204" />
+              <path class="ln" d="M 510 238 C 585 260, 650 260, 710 112" />
+              <path class="ln" d="M 510 322 C 600 360, 650 360, 710 368" />
+
+              <path class="ln" d="M 930 148 C 930 156, 930 160, 930 168" />
+              <path class="ln" d="M 930 238 C 930 246, 930 250, 930 258" />
+              <path class="ln" d="M 930 320 C 930 328, 930 332, 930 338" />
+            </svg>
+          </div>
+          <div class="foot">
+            <b>HITL (Human-in-the-Loop):</b> Nur bei Unsicherheit/Abweichungen wird ein Mitarbeiter in der Exception Queue eingebunden (prüfen, korrigieren, bestätigen). Danach läuft der Workflow automatisch weiter.
+          </div>
+        </div>
+      </div>
+
+      <!-- Below: ROI left, KPIs right -->
+      <div class="below">
+
+        <div class="card">
+          <div class="hd">
+            <h2>ROI-Rechner</h2>
+            <div class="chip"><span class="dot" style="background:var(--warn)"></span><span><b>Interaktiv</b>: Parameter ändern → KPIs aktualisieren</span></div>
+          </div>
+          <div class="bd">
+            <div class="panel" style="margin-bottom:12px">
+              <div class="small" style="margin-bottom:10px"><b>Volumen & Zeiten</b></div>
+              <div class="form">
+                <div class="row">
+                  <label>Artikel im Übergangsstatus</label>
+                  <input id="inpParts" type="number" min="0" step="1" value="25" />
+                </div>
+                <div class="row">
+                  <label>Lieferungen je Artikel/Monat</label>
+                  <input id="inpShipPerMonth" type="number" min="0" step="0.1" value="2.0" />
+                </div>
+                <div class="row">
+                  <label>Manuelle Zeit je Lieferung (Min)</label>
+                  <input id="inpMinPerShip" type="number" min="0" step="1" value="20" />
+                </div>
+                <div class="row">
+                  <label>Automatisierungsgrad (%)</label>
+                  <input id="inpAutoPct" type="number" min="0" max="100" step="1" value="70" />
+                </div>
+              </div>
+            </div>
+
+            <div class="panel" style="margin-bottom:12px">
+              <div class="small" style="margin-bottom:10px"><b>Ersparnis-Annahmen</b></div>
+              <div class="form">
+                <div class="row">
+                  <label>Personalkosten QS-Mitarbeiter (€/h)</label>
+                  <input id="inpRate" type="number" min="0" step="1" value="55" />
+                </div>
+              </div>
+            </div>
+
+            <div class="panel" style="margin-bottom:12px">
+              <div class="small" style="margin-bottom:10px"><b>Kosten-Annahmen</b></div>
+              <div class="form">
+                <div class="row">
+                  <label>Einmalaufwand Implementierung (k€)</label>
+                  <input id="inpOneTime" type="number" min="0" step="1" value="30" />
+                </div>
+                <div class="row">
+                  <label>Run-Kosten/Monat (k€)</label>
+                  <input id="inpRunPerMonth" type="number" min="0" step="0.1" value="2.0" />
+                </div>
+                <div class="small" style="grid-column: 1 / -1">Summe der laufenden Betriebskosten: Lizenzen/Hosting (n8n), KI-Verarbeitung (Langdock/LLM/OCR), Repository/Dossier, Monitoring & Betrieb.</div>
+              </div>
+              <div class="btns">
+                <button id="btnRecalc">Berechnen</button>
+                <button id="btnSave" class="secondary">ROI speichern</button>
+                <button id="btnReset" class="secondary">Reset</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd">
+            <h2>KPIs</h2>
+            <div class="chip"><span class="dot" style="background:var(--accent)"></span><span><b>Output</b>: Einsparung, Run, Payback, ROI</span></div>
+          </div>
+          <div class="bd">
+            <div class="kpis">
+              <div class="kpi">
+                <div class="label">Einsparung/Jahr</div>
+                <div class="value" id="kpiSavings">—</div>
+                <div class="hint">Zeitersparnis + vermeidbare Nebenkosten</div>
+              </div>
+              <div class="kpi">
+                <div class="label">Run-Kosten/Jahr</div>
+                <div class="value" id="kpiRun">—</div>
+                <div class="hint">LLM/OCR + Plattform + Betrieb</div>
+              </div>
+              <div class="kpi">
+                <div class="label">Payback</div>
+                <div class="value" id="kpiPayback">—</div>
+                <div class="hint">Einmalaufwand / Netto/Jahr</div>
+              </div>
+              <div class="kpi">
+                <div class="label">ROI (12 Monate)</div>
+                <div class="value" id="kpiROI">—</div>
+                <div class="hint">inkl. Einmalaufwand & Run</div>
+              </div>
+            </div>
+
+            <div class="panel" style="margin-top:12px">
+              <div class="small" style="margin-bottom:10px"><b>Visualisierung</b></div>
+              <div class="chartBox" style="height:220px">
+                <canvas id="chart" aria-label="ROI chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="hd">
+        <h2>Feedback</h2>
+        <div class="chip"><span class="dot" style="background:var(--good)"></span><span><b>Kurzer Loop</b>: Feedback speichern</span></div>
+      </div>
+      <div class="bd">
+        <div class="panel">
+          <div class="form">
+            <div class="row">
+              <label>Name / Bereich (optional)</label>
+              <input id="fbName" type="text" placeholder="z. B. QS, Messraum, Logistik" />
+            </div>
+            <div class="row">
+              <label>Betreff</label>
+              <input id="fbSubject" type="text" placeholder="z. B. Diagramm verständlich? Fehlende Quellen?" />
+            </div>
+            <div class="row" style="grid-column: 1 / -1">
+              <label>Feedback</label>
+              <textarea id="fbText" rows="4" placeholder="Was passt, was fehlt, was soll geändert werden?"></textarea>
+            </div>
+          </div>
+          <div class="btns">
+            <button id="fbSave" class="secondary">Feedback speichern</button>
+            <button id="fbExport" class="secondary">Feedback exportieren</button>
+            <button id="fbClear" class="secondary">Leeren</button>
+          </div>
+          <div class="foot" id="fbStatus" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tip" class="tip" role="status" aria-live="polite">
+    <p class="h" id="tipH"></p>
+    <p class="b" id="tipB"></p>
+    <div class="kpiLine" id="tipK"></div>
+  </div>
+
+  <script>
+    // Tooltip content (architecture)
+    const TIP = {
+      "src-coc": {
+        h: "Materialprüfzeugnis",
+        b: "Automatisches Einsammeln (Portal/E-Mail/Anmeldung), Ablage, Metadaten (Charge, Zertifikat-Nr., Datum). Optional: Extraktion ausgewählter Kennwerte.",
+        k: ["Input", "PDF/Scan", "Metadaten"]
+      },
+      "src-metrology": {
+        h: "Messbericht Messraum",
+        b: "Pull vom Fileserver/Export. OCR nur bei Scan. Extraktion der relevanten Maße + Messdatum; Plausibilisierung gegen Artikel/Los.",
+        k: ["Input", "PDF", "OCR optional"]
+      },
+      "src-caq": {
+        h: "CAQ Serienprüfung",
+        b: "Strukturierte Prüfergebnisse (API/Export): Prüfumfang, Messwerte, Bewertung, Datum. Wird als Datenquelle ins Dossier gemappt.",
+        k: ["Input", "API/Export", "Strukturiert"]
+      },
+      "n8n": {
+        h: "n8n Orchestrierung",
+        b: "Steuert den End-to-End Ablauf: Trigger (Shipment), Aufrufe der Connectoren, Sequenzierung, Retries, Dead-letter, Protokollierung und Eskalation.",
+        k: ["Workflow", "Retries", "SLA"]
+      },
+      "langdock": {
+        h: "Langdock / LLM Verarbeitung",
+        b: "Dokumentklassifikation, OCR/Parsing, Extraktion nach Schema (JSON) und Validierungsregeln. Ergebnis: strukturierte Werte + Confidence Score.",
+        k: ["LLM", "Extraktion", "Validierung"]
+      },
+      "exceptions": {
+        h: "Exception Queue (HITL)",
+        b: "Nur Abweichungen/Low-Confidence Fälle: Mensch prüft, korrigiert, bestätigt. Danach läuft der Prozess automatisch weiter.",
+        k: ["Human-in-the-loop", "Nur Ausnahmen"]
+      },
+      "dossier": {
+        h: "Dossier & Repository",
+        b: "Zentrale Ablage + Referenz je Lieferung: Originalnachweise, generierter Report, Versionen, Metadaten und Audit Trail. Das reduziert Suchaufwand drastisch.",
+        k: ["Versionen", "Audit", "Single Source"]
+      },
+      "reportgen": {
+        h: "Report Generator",
+        b: "Erzeugt den Kunden-Prüfbericht aus dem Dossier (Template → PDF). Ziel: keine manuelle Excel-Übertragung mehr.",
+        k: ["Template", "PDF", "Reproduzierbar"]
+      },
+      "distribution": {
+        h: "Versand & Nachweis",
+        b: "Auslieferung an den Kunden (E-Mail/Portal/EDI) inklusive Versandprotokoll und eindeutiger Referenz auf die Lieferung.",
+        k: ["Kunde", "Nachweis", "Logging"]
+      },
+      "monitoring": {
+        h: "Monitoring",
+        b: "KPIs zur Steuerung: Touch-Time, Durchlaufzeit, Fehlerrate, Hit-Rate (Auto vs. HITL), SLA-Verletzungen.",
+        k: ["KPIs", "SLA", "Qualität"]
+      }
+    };
+
+    const tipEl = document.getElementById('tip');
+    const tipH = document.getElementById('tipH');
+    const tipB = document.getElementById('tipB');
+    const tipK = document.getElementById('tipK');
+
+    function showTip(key, x, y){
+      const t = TIP[key];
+      if (!t) return;
+      tipH.textContent = t.h;
+      tipB.textContent = t.b;
+      tipK.innerHTML = (t.k || []).map(s => `<span class="mini">${s}</span>`).join('');
+      tipEl.style.display = 'block';
+      positionTip(x, y);
+      tipEl.classList.add('on');
+    }
+
+    function hideTip(){
+      tipEl.classList.remove('on');
+      tipEl.style.display = 'none';
+    }
+
+    function positionTip(x, y){
+      const pad = 14;
+      const w = tipEl.offsetWidth || 360;
+      const h = tipEl.offsetHeight || 120;
+      let left = x + 12;
+      let top = y + 12;
+      if (left + w + pad > window.innerWidth) left = x - w - 12;
+      if (top + h + pad > window.innerHeight) top = y - h - 12;
+      tipEl.style.left = `${Math.max(pad, left)}px`;
+      tipEl.style.top = `${Math.max(pad, top)}px`;
+    }
+
+    // Attach tooltip handlers to SVG groups
+    function wireArchitectureTooltips(){
+      const wrap = document.getElementById('archWrap') || document.body;
+      const nodes = document.querySelectorAll('svg .hot[data-tip]');
+
+      // Ensure SVG elements actually receive pointer events (some browsers are picky)
+      nodes.forEach(el => {
+        el.style.pointerEvents = 'all';
+      });
+
+      nodes.forEach(el => {
+        const key = el.getAttribute('data-tip');
+        const onEnter = (ev) => {
+          const pt = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+          showTip(key, pt.clientX, pt.clientY);
+        };
+        const onMove = (ev) => {
+          if (!tipEl.classList.contains('on')) return;
+          const pt = ev.touches && ev.touches[0] ? ev.touches[0] : ev;
+          positionTip(pt.clientX, pt.clientY);
+        };
+
+        // Most reliable set across embedded iframes: pointer* + mouse* + direct rect listeners
+        el.addEventListener('pointerenter', onEnter);
+        el.addEventListener('pointermove', onMove);
+        el.addEventListener('pointerleave', hideTip);
+        el.addEventListener('mouseenter', onEnter);
+        el.addEventListener('mousemove', onMove);
+        el.addEventListener('mouseleave', hideTip);
+
+        const rect = el.querySelector('rect');
+        if (rect) {
+          rect.style.pointerEvents = 'all';
+          rect.addEventListener('pointerenter', onEnter);
+          rect.addEventListener('pointermove', onMove);
+          rect.addEventListener('pointerleave', hideTip);
+          rect.addEventListener('mouseenter', onEnter);
+          rect.addEventListener('mousemove', onMove);
+          rect.addEventListener('mouseleave', hideTip);
+        }
+      });
+
+      // Hide on scroll or click outside
+      window.addEventListener('scroll', hideTip, {passive:true});
+      document.addEventListener('pointerdown', (ev) => {
+        if (!ev.target.closest('svg .hot')) hideTip();
+      });
+
+      // Debug: if nothing is wired, show a gentle hint in console
+      if (!nodes.length) {
+        console.warn('[arch-tooltips] No .hot nodes found.');
+      }
+
+      // Also allow hovering the wrapper to keep tooltip alive while moving slightly
+      wrap.addEventListener('pointermove', (ev) => {
+        if (tipEl.classList.contains('on')) positionTip(ev.clientX, ev.clientY);
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', wireArchitectureTooltips);
+    setTimeout(wireArchitectureTooltips, 0);
+    setTimeout(wireArchitectureTooltips, 250);
+
+    const eur = (v) => {
+      if (!isFinite(v)) return "—";
+      return new Intl.NumberFormat('de-DE', { style:'currency', currency:'EUR', maximumFractionDigits: 0 }).format(v);
+    };
+    const pct = (v) => {
+      if (!isFinite(v)) return "—";
+      return new Intl.NumberFormat('de-DE', { style:'percent', maximumFractionDigits: 0 }).format(v);
+    };
+    const months = (v) => {
+      if (!isFinite(v)) return "—";
+      if (v === Infinity) return "∞";
+      return `${v.toFixed(1)} Mon.`;
+    };
+
+    const defaults = { parts:25, shipPerMonth:2.0, minPerShip:20, autoPct:70, rate:55, oneTimeK:30, runPerMonthK:2.0 };
+
+    function getInputs(){
+      return {
+        parts: +document.getElementById('inpParts').value,
+        shipPerMonth: +document.getElementById('inpShipPerMonth').value,
+        minPerShip: +document.getElementById('inpMinPerShip').value,
+        autoPct: +document.getElementById('inpAutoPct').value,
+        rate: +document.getElementById('inpRate').value,
+        oneTimeK: +document.getElementById('inpOneTime').value,
+        runPerMonthK: +document.getElementById('inpRunPerMonth').value,
+      };
+    }
+
+    function setDefaults(){
+      document.getElementById('inpParts').value = defaults.parts;
+      document.getElementById('inpShipPerMonth').value = defaults.shipPerMonth;
+      document.getElementById('inpMinPerShip').value = defaults.minPerShip;
+      document.getElementById('inpAutoPct').value = defaults.autoPct;
+      document.getElementById('inpRate').value = defaults.rate;
+      document.getElementById('inpOneTime').value = defaults.oneTimeK;
+      document.getElementById('inpRunPerMonth').value = defaults.runPerMonthK;
+    }
+
+    function model(i){
+      const shipmentsPerYear = i.parts * i.shipPerMonth * 12;
+      const manualHoursPerYear = shipmentsPerYear * (i.minPerShip/60);
+      const autoFraction = Math.max(0, Math.min(1, i.autoPct/100));
+      const savedHours = manualHoursPerYear * autoFraction;
+      const laborSavings = savedHours * i.rate;
+      const grossSavings = laborSavings;
+
+      const runCostYear = Math.max(0, (i.runPerMonthK || 0) * 1000 * 12);
+      const oneTime = Math.max(0, (i.oneTimeK || 0) * 1000);
+
+      const netPerYear = grossSavings - runCostYear;
+      const paybackMonths = (netPerYear > 0) ? (oneTime / netPerYear) * 12 : Infinity;
+      const roi12m = (oneTime > 0) ? ((grossSavings - runCostYear - oneTime) / oneTime) : Infinity;
+
+      return { grossSavings, runCostYear, oneTime, netPerYear, paybackMonths, roi12m };
+    }
+
+    const ctx = document.getElementById('chart');
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Einsparung/Jahr', 'Run-Kosten/Jahr', 'Netto/Jahr'],
+        datasets: [{
+          data: [0,0,0],
+          backgroundColor: ['rgba(43,213,118,.75)','rgba(255,204,102,.75)','rgba(90,167,255,.75)'],
+          borderColor: ['rgba(43,213,118,1)','rgba(255,204,102,1)','rgba(90,167,255,1)'],
+          borderWidth: 1.2,
+          borderRadius: 10
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: 'rgba(35,49,84,.55)' },
+            ticks: {
+              color: 'rgba(150,169,205,.95)',
+              callback: (v) => new Intl.NumberFormat('de-DE', { notation:'compact', compactDisplay:'short' }).format(v)
+            }
+          },
+          x: { grid: { display:false }, ticks: { color: 'rgba(150,169,205,.95)'} }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => eur(ctx.raw) } }
+        }
+      }
+    });
+
+    function paint(){
+      const m = model(getInputs());
+      document.getElementById('kpiSavings').textContent = eur(m.grossSavings);
+      document.getElementById('kpiRun').textContent = eur(m.runCostYear);
+      document.getElementById('kpiPayback').textContent = months(m.paybackMonths);
+      document.getElementById('kpiROI').textContent = isFinite(m.roi12m) ? pct(m.roi12m) : '—';
+
+      chart.data.datasets[0].data = [m.grossSavings, m.runCostYear, m.netPerYear];
+      chart.update();
+    }
+
+    const now = new Date();
+    document.getElementById('asof').textContent = now.toLocaleDateString('de-DE', { year:'numeric', month:'2-digit', day:'2-digit' });
+
+    setDefaults();
+    paint();
+
+    function exportROI(){
+      const i = getInputs();
+      const m = model(i);
+      const payload = {
+        saved_at: new Date().toISOString(),
+        inputs: i,
+        results: {
+          savings_year: m.grossSavings,
+          run_year: m.runCostYear,
+          one_time: m.oneTime,
+          net_year: m.netPerYear,
+          payback_months: m.paybackMonths,
+          roi_12m: m.roi12m
+        }
+      };
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `roi-certified-delivery-${payload.saved_at.slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      // Confirmation
+      alert('ROI-Parameter und Ergebnisse wurden als Datei gespeichert.');
+    }
+
+    document.getElementById('btnRecalc').addEventListener('click', paint);
+    document.getElementById('btnSave').addEventListener('click', exportROI);
+    document.getElementById('btnReset').addEventListener('click', () => { setDefaults(); paint(); });
+
+    // Feedback (Note: browser sandbox may block localStorage; we fall back to file export)
+    const fbName = document.getElementById('fbName');
+    const fbSubject = document.getElementById('fbSubject');
+    const fbText = document.getElementById('fbText');
+    const fbStatus = document.getElementById('fbStatus');
+
+    function setFbStatus(msg){
+      fbStatus.textContent = msg;
+    }
+
+    function getFb(){
+      return {
+        saved_at: new Date().toISOString(),
+        name: (fbName.value || '').trim(),
+        subject: (fbSubject.value || '').trim(),
+        text: (fbText.value || '').trim(),
+        context: {
+          page: 'Certified Delivery Report – Zielarchitektur & ROI',
+          roi_inputs: getInputs(),
+          roi_results: model(getInputs())
+        }
+      };
+    }
+
+    function saveFeedback(){
+      const fb = getFb();
+      if (!fb.subject && !fb.text){
+        setFbStatus('Bitte mindestens Betreff oder Feedback ausfüllen.');
+        return;
+      }
+      try{
+        const key = 'cdr_feedback_v1';
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        existing.unshift(fb);
+        localStorage.setItem(key, JSON.stringify(existing));
+        setFbStatus('Feedback gespeichert.');
+      } catch (e){
+        // localStorage blocked in this sandbox → fallback to download
+        exportFeedback();
+      }
+    }
+
+    function exportFeedback(){
+      const fb = getFb();
+      if (!fb.subject && !fb.text){
+        setFbStatus('Bitte mindestens Betreff oder Feedback ausfüllen.');
+        return;
+      }
+      const blob = new Blob([JSON.stringify(fb, null, 2)], {type: 'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `feedback-certified-delivery-${fb.saved_at.slice(0,19).replaceAll(':','-')}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setFbStatus('Feedback exportiert.');
+      alert('Feedback wurde als Datei gespeichert.');
+    }
+
+    function clearFeedback(){
+      fbName.value = '';
+      fbSubject.value = '';
+      fbText.value = '';
+      setFbStatus('');
+    }
+
+    document.getElementById('fbSave').addEventListener('click', saveFeedback);
+    document.getElementById('fbExport').addEventListener('click', exportFeedback);
+    document.getElementById('fbClear').addEventListener('click', clearFeedback);
+
+    ['inpParts','inpShipPerMonth','inpMinPerShip','inpAutoPct','inpRate','inpOneTime','inpRunPerMonth'].forEach(id =>
+      document.getElementById(id).addEventListener('input', () => {
+        window.clearTimeout(window.__t);
+        window.__t = window.setTimeout(paint, 120);
+      })
+    );
+  </script>
+</body>
+</html>
